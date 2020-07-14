@@ -1,0 +1,15 @@
+# Specify the training data to be used for the model.
+training_data:
+  directory: "data"
+  traing_size: 1000
+  image_file_format: 'jpg'
+  image_shape: [64, 64]
+  batch_size: 20000
+  
+model:
+  channels: 3
+  height: 32
+  width: 32
+  latent_dim: 32
+
+
