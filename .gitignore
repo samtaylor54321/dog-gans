@@ -40,3 +40,6 @@ vignettes/*.pdf
 
 # Exclude images
 data/*
+
+# Exclude outputs
+outputs/*

@@ -1,47 +1,41 @@
 library(keras)
 library(R6)
-library(yaml)
+
 
 Gan <- R6Class("Gan", 
   public = list(
+    gan = NA,
     
-    initialize = function(width, height, channels, latent_dim) {
-      width = width
-      height = height
-      channels = channels 
-      latent_dim = latent_dim
-    },
-    
-    generator = keras_model(private$generator_input, private$generator_ouput)
+    initialize = function(latent_dim, discriminator, generator) {
+      private$latent_dim = latent_dim
+      private$discriminator = discriminator
+      private$generator = generator
+      
+      private$gan_input = layer_input(shape = c(private$latent_dim))
+      
+      private$gan_output = private$discriminator(private$generator(
+        private$gan_input))
+      
+      private$optimiser = optimizer_rmsprop(
+        lr = 0.0004,
+        clipvalue = 1.0,
+        decay = 1e-8
+      )
+      
+      self$gan = keras_model(private$gan_input, private$gan_output) %>% 
+        compile(optimizer = private$optimiser, loss = "binary_crossentropy")
+    }
   ),
-  
   private = list(
-    # Input for latent dim for the generator
-    generator_input = layer_input(shape = c(public$latent_dim)),
-    
-    # Output for latent dim for the generator
-    generator_output = generator_input %>% 
-      
-      layer_dense(units = 128 * 16 * 16) %>% 
-      layer_activation_leaky_relu() %>% 
-      layer_reshape(target_shape = c(16, 16, 128)) %>% 
-      
-      layer_conv_2d(filters = 256, kernel_size = 5,
-                    padding = "same") %>% 
-      layer_activation_leaky_relu() %>% 
-      
-      layer_conv_2d_transpose(filters = 256, kernel_size = 4,
-                              strides = 2, padding = "same") %>% 
-      layer_activation_leaky_relu() %>% 
-      
-      layer_conv_2d(filters = 256, kernel_size = 5, 
-                    padding = "same") %>% 
-      layer_activation_leaky_relu() %>% 
-      layer_conv_2d(filters = 256, kernel_size = 5, 
-                    padding = "same") %>% 
-      layer_activation_leaky_relu() %>% 
-      
-      layer_conv_2d(filters = channels, kernel_size = 7, 
-                    activation = "tanh", padding = "same")
+    latent_dim = NA,
+    discriminator = NA,
+    generator = NA,
+    gan_input = NA,
+    gan_output = NA,
+    optimiser = NA
   )
 )
+
+
+
+

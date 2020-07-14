@@ -1,93 +1,95 @@
 library(here)
-library(imager)
-library(glue)
 library(purrr)
 library(yaml)
-library(keras)
 
+# Source code
 map(paste("src/",list.files(here("src")), sep=""), source)
 
 # Load settings for script
 config <- yaml.load_file(here("settings.yaml"))
 
-latent_dim <- 32
-height <- 32
-width <- 32
-channels <- 3
+# Instantiate GAN
+discriminator <- Discriminator$new(config$model$height,
+                                  config$model$width,
+                                  config$model$channels)
+
+generator <- Generator$new(config$model$latent_dim,
+              config$model$channels)
+
+gan <- Gan$new(latent_dim = config$model$latent_dim,
+               discriminator$discriminator,
+               generator$generator)
+
+# Load data
+cifar10 <- dataset_cifar10()
+
+c(c(x_train, y_train), c(x_test, y_test)) %<-% cifar10
 
 
-generator_input <- layer_input(shape = c(latent_dim))
+x_train <- x_train[as.integer(y_train) == 6, , ,]
+x_train <- x_train / 255
 
-generator_output <- generator_input %>% 
+# Create directory if it doesn't exist
+if (!any(config$output$dir == list.files(here()))) {
+  dir.create(path=here(config$output$dir))
+}
+
+# Train GAN
+for (step in 1:config$model$iterations) {
   
-  layer_dense(units = 128 * 16 * 16) %>% 
-  layer_activation_leaky_relu() %>% 
-  layer_reshape(target_shape = c(16, 16, 128)) %>% 
+  random_latent_vectors <- matrix(rnorm(config$model$batch_size * 
+                                        config$model$latent_dim),
+                                  nrow = config$model$batch_size, 
+                                  ncol = config$model$latent_dim)
   
-  layer_conv_2d(filters = 256, kernel_size = 5,
-                padding = "same") %>% 
-  layer_activation_leaky_relu() %>% 
+  generated_images <- generator$generator %>% predict(random_latent_vectors)
   
-  layer_conv_2d_transpose(filters = 256, kernel_size = 4,
-                          strides = 2, padding = "same") %>% 
-  layer_activation_leaky_relu() %>% 
+  stop <- config$model$start + batch_size - 1
+  real_images <- x_train[start:stop, , ,]
+  rows <- nrow(real_images)
+  combined_images <- array(0, dim = c(rows * 2, dim(real_images)[-1]))
+  combined_images[1:rows,,,] <- generated_images
+  combined_images[(rows+1) : (rows*2),,,] <- real_images  
   
-  layer_conv_2d(filters = 256, kernel_size = 5, 
-                padding = "same") %>% 
-  layer_activation_leaky_relu() %>% 
-  layer_conv_2d(filters = 256, kernel_size = 5, 
-                padding = "same") %>% 
-  layer_activation_leaky_relu() %>% 
+  labels <- rbind(matrix(1, nrow = config$model$batch_size, ncol=1),
+                  matrix(0, nrow = config$model$batch_size, ncol=1))
   
-  layer_conv_2d(filters = channels, kernel_size = 7, 
-                activation = "tanh", padding = "same") 
-
-generator <- keras_model(generator_input, generator_output)
-
-
-
-discriminator_input <- layer_input(shape = c(height, width, channels))
-
-discriminator_output <- discriminator_input %>% 
+  labels <- labels + (0.5 * array(runif(prod(dim(labels))),
+                                  dim = dim(labels)))
   
-  layer_conv_2d(filters = 128, kernel_size = 3) %>% 
-  layer_activation_leaky_relu() %>% 
+  d_loss <- discriminator$discriminator %>% 
+    train_on_batch(combined_images, labels)
   
-  layer_conv_2d(filters = 128, kernel_size = 4, strides = 2) %>% 
-  layer_activation_leaky_relu() %>% 
-  layer_conv_2d(filters = 128, kernel_size = 4, strides = 2) %>% 
-  layer_activation_leaky_relu() %>% 
-  layer_conv_2d(filters = 128, kernel_size = 4, strides = 2) %>% 
-  layer_activation_leaky_relu() %>% 
-  layer_flatten() %>% 
-  layer_dropout(rate = 0.4) %>% 
-  layer_dense(units = 1, activation = "sigmoid")
+  random_latent_vectors <- matrix(rnorm(config$model$batch_size * 
+                                        config$model$latent_dim),
+                                  nrow = config$model$batch_size,
+                                  ncol = config$latent_dim)
+  
+  misleading_targets <- array(0, dim = c(config$model$batch_size, 1))
+  
+  a_loss <- gan$gan %>% 
+    train_on_batch(random_latent_vectors, misleading_targets)
+  
+  start <- start + config$model$batch_size
+  
+  if (start > (nrow(x_train) - config$model$batch_size))
+      start <- 1
+  
+  if (step %% 100 == 0) {
+    
+    save_model_weights_hdf5(gan, here(config$output$dir,"gan.h5"))
+    cat("discriminator loss:", d_loss, "\n")
+    cat("adversarial_loss:", a_loss, "\n")
+    
+    image_array_save(
+      generated_images[1,,,] * 255,
+      path = here(config$output$dir,paste0("generated_frog", step, ".png"))
+    )
+    
+    image_array_save(
+      real_images[1,,,] * 255,
+      path = here(config$output$dir,paste0("real_frog", step, ".png"))
+    )
+  }
+}
 
-discriminator <- keras_model(discriminator_input, discriminator_output)
-
-discriminator_optimiser <- optimizer_rmsprop(
-  lr = 0.00008,
-  clipvalue = 1.0,
-  decay = 1e-8)
-
-discriminator %>% 
-  compile(optimizer = discriminator_optimiser, loss ="binary_crossentropy")
-
-
-freeze_weights(discriminator)
-
-gan_input <- layer_input(shape = c(latent_dim))
-gan_output <- discriminator(generator(gan_input))
-gan <- keras_model(gan_input, gan_output)
-
-gan_optimiser <- optimizer_rmsprop(
-  lr = 0.0004,
-  clipvalue = 1.0,
-  decay = 1e-8
-)
-
-gan %>% compile(optimizer = gan_optimiser,
-                loss = "binary_crossentropy")
-
-
-source(here("src/gan.R"))
