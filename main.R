@@ -23,10 +23,8 @@ gan <- Gan$new(latent_dim = config$model$latent_dim,
 # Load data
 cifar10 <- dataset_cifar10()
 
-c(c(x_train, y_train), c(x_test, y_test)) %<-% cifar10
+x_train <- cifar10[['train']][['x']][cifar10[['train']][['y']] == 6, , , ]
 
-
-x_train <- x_train[as.integer(y_train) == 6, , ,]
 x_train <- x_train / 255
 
 # Create directory if it doesn't exist
@@ -44,8 +42,8 @@ for (step in 1:config$model$iterations) {
   
   generated_images <- generator$generator %>% predict(random_latent_vectors)
   
-  stop <- config$model$start + batch_size - 1
-  real_images <- x_train[start:stop, , ,]
+  stop <- config$model$start + config$model$batch_size - 1
+  real_images <- x_train[config$model$start:stop, , ,]
   rows <- nrow(real_images)
   combined_images <- array(0, dim = c(rows * 2, dim(real_images)[-1]))
   combined_images[1:rows,,,] <- generated_images
@@ -63,14 +61,14 @@ for (step in 1:config$model$iterations) {
   random_latent_vectors <- matrix(rnorm(config$model$batch_size * 
                                         config$model$latent_dim),
                                   nrow = config$model$batch_size,
-                                  ncol = config$latent_dim)
+                                  ncol = config$model$latent_dim)
   
   misleading_targets <- array(0, dim = c(config$model$batch_size, 1))
   
   a_loss <- gan$gan %>% 
     train_on_batch(random_latent_vectors, misleading_targets)
   
-  start <- start + config$model$batch_size
+  start <- config$model$start + config$model$batch_size
   
   if (start > (nrow(x_train) - config$model$batch_size))
       start <- 1
