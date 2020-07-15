@@ -1,22 +1,18 @@
-# Specify the training data to be used for the model.
-training_data:
-  directory: "data"
-  traing_size: 1000
-  image_file_format: 'jpg'
+# Specify model input directory
+input:
+  dir: "data"
   image_shape: [64, 64]
 
-  
+# Specify the training data to be used for the model
 model:
   channels: 3
-  height: 32
-  width: 32
-  latent_dim: 32
-  batch_size: 2000
+  height: 64
+  width: 64
+  latent_dim: 64
+  batch_size: 20000
   iterations: 10000
   start: 1
-  
+
+# Specify output file 
 output: 
   dir: "outputs"
-  
-
-

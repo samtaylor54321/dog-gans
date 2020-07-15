@@ -13,9 +13,9 @@ Generator <- R6Class("Generator",
       private$generator_input = layer_input(shape = private$latent_dim)
       private$generator_output = private$generator_input %>% 
         
-        layer_dense(units = 128 * 16 * 16) %>% 
+        layer_dense(units = 128 * 32 * 32) %>% 
         layer_activation_leaky_relu() %>% 
-        layer_reshape(target_shape = c(16, 16, 128)) %>% 
+        layer_reshape(target_shape = c(32, 32, 128)) %>% 
         
         layer_conv_2d(filters = 256, kernel_size = 5,
                       padding = "same") %>% 
